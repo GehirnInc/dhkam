@@ -1,0 +1,9 @@
+Implementation of the Diffie-Hellman Key Agreement Method using
+the RFC 3526 Group 14, and with blinded key generation.
+
+Released under the ISC license. See the LICENSE file for details.
+
+TODO:
+        - Find test vectors for keys to validate public key generation.
+        - Improve unit tests.
+
