@@ -140,7 +140,7 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 	r1 := new(big.Int).Exp(a, blinding, P)
 	r2 := new(big.Int).Exp(a, bx, P)
 	y = new(big.Int).Mul(r1, r2)
-	y.Mod(r1, P)
+	y.Mod(y, P)
 
 	if y.BitLen() > P.BitLen() {
 		y = nil
