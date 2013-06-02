@@ -139,14 +139,14 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 	bx.Sub(bx, blinding)
 	r1 := new(big.Int).Exp(a, blinding, P)
 	r2 := new(big.Int).Exp(a, bx, P)
-	r1.Mul(r1, r2)
-	r1.Mod(r1, P)
+	y = new(big.Int).Mul(r1, r2)
+	y.Mod(r1, P)
 
-	if r1.BitLen() > P.BitLen() {
+	if y.BitLen() > P.BitLen() {
+		y = nil
 		err = ErrBlindingFailed
 		return
 	}
-	y = r1
 	return
 }
 
