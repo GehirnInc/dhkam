@@ -136,9 +136,9 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 	}
 	blinding := new(big.Int).Add(big2To256, r)
 
-	blindX := new(big.Int).Sub(bx, blinding)
+	bx.Sub(bx, blinding)
 	r1 := new(big.Int).Exp(a, blinding, P)
-	r2 := new(big.Int).Exp(a, blindX, P)
+	r2 := new(big.Int).Exp(a, bx, P)
 	r1.Mul(r1, r2)
 	r1.Mod(r1, P)
 
