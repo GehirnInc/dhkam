@@ -61,7 +61,7 @@ func (prv *PrivateKey) ExportPrivate() []byte {
 	return prv.X.Bytes()
 }
 
-//
+// GeneratePublic is used to regenerate the public key for the private key.
 func (prv *PrivateKey) GeneratePublic(prng io.Reader) (err error) {
 	if prv == nil {
 		return ErrInvalidPrivateKey
@@ -150,7 +150,8 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 	return
 }
 
-// GenerateSharedKey returns
+// GenerateSharedKey returns a shared from a private and public key suitable
+// for use in symmetric encryption.
 func (prv *PrivateKey) GenerateSharedKey(prng io.Reader, pub *PublicKey, size int) (sk []byte, err error) {
 	if !pub.Valid() {
 		err = ErrInvalidPublicKey
