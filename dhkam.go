@@ -150,8 +150,8 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 	return
 }
 
-// GenerateSharedKey returns a shared from a private and public key suitable
-// for use in symmetric encryption.
+// GenerateSharedKey returns a shared key from a private and public key
+// suitable for use in symmetric encryption.
 func (prv *PrivateKey) GenerateSharedKey(prng io.Reader, pub *PublicKey, size int) (sk []byte, err error) {
 	if !pub.Valid() {
 		err = ErrInvalidPublicKey
