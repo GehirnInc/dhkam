@@ -60,7 +60,7 @@ func TestImportPublic(t *testing.T) {
         }
 
         out := prv.Export()
-        pub, err := ImportPublic(in)
+        pub, err := ImportPublic(out)
         if err != nil {
                 fmt.Println(err.Error())
                 t.FailNow()
