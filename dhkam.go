@@ -15,6 +15,7 @@ var (
 	ErrBlindingFailed    = fmt.Errorf("dhkam: blinding failed")
 	ErrInvalidPrivateKey = fmt.Errorf("dhkam: invalid private key")
 	ErrInvalidPublicKey  = fmt.Errorf("dhkam: invalid public key")
+	ErrInvalidSharedKey  = fmt.Errorf("dhkam: invalid shared key")
 )
 
 type PublicKey struct {
@@ -152,7 +153,7 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 
 // GenerateSharedKey returns a shared key from a private and public key
 // suitable for use in symmetric encryption.
-func (prv *PrivateKey) GenerateSharedKey(prng io.Reader, pub *PublicKey, size int) (sk []byte, err error) {
+func (prv *PrivateKey) SharedKey(prng io.Reader, pub *PublicKey, size int) (sk []byte, err error) {
 	if !pub.Valid() {
 		err = ErrInvalidPublicKey
 		return
@@ -162,5 +163,8 @@ func (prv *PrivateKey) GenerateSharedKey(prng io.Reader, pub *PublicKey, size in
 		return
 	}
 	sk = skBig.Bytes()[:size]
+	if len(sk) < size {
+		err = ErrInvalidSharedKey
+	}
 	return
 }
