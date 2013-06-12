@@ -5,6 +5,10 @@ import "crypto/rand"
 import "fmt"
 import "testing"
 
+// Generating a shared key for AES256 with an HMAC-SHA512 requires 96
+// bytes of keying material.
+const SharedKeySize = 96
+
 func TestSharedKey(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader)
 	if err != nil {
@@ -17,12 +21,12 @@ func TestSharedKey(t *testing.T) {
 		t.Fail()
 	}
 
-	sk1, err := prv1.GenerateSharedKey(rand.Reader, &prv2.PublicKey, 32)
+	sk1, err := prv1.SharedKey(rand.Reader, &prv2.PublicKey, SharedKeySize)
 	if err != nil {
 		fmt.Println(err.Error())
 		t.Fail()
 	}
-	sk2, err := prv2.GenerateSharedKey(rand.Reader, &prv1.PublicKey, 32)
+	sk2, err := prv2.SharedKey(rand.Reader, &prv1.PublicKey, SharedKeySize)
 	if err != nil {
 		fmt.Println(err.Error())
 		t.Fail()
