@@ -55,3 +55,21 @@ func TestImportPrivate(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestImportPublic(t *testing.T) {
+        prv, err := GenerateKey(rand.Reader)
+        if err != nil {
+                fmt.Println(err.Error())
+                t.FailNow()
+        }
+
+        out := prv.Export()
+        pub, err := ImportPublic(out)
+        if err != nil {
+                fmt.Println(err.Error())
+                t.FailNow()
+        } else if pub.A.Cmp(prv.PublicKey.A) != 0 {
+                fmt.Println("dhkam: import public key failed")
+                t.FailNow()
+        }
+}
