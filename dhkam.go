@@ -184,7 +184,7 @@ var (
 	AES256GCM = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 46}
 )
 
-type KEKParams struct {
+type KEK struct {
 	KeySpecificInfo KeySpecificInfo
 	PartyAInfo      []byte `asn1:"optional"`
 	SuppPubInfo     []byte
@@ -195,7 +195,7 @@ type KeySpecificInfo struct {
 	counter   []byte
 }
 
-func (kek *KEKParams) KeyLen() int {
+func (kek *KEK) KeyLen() int {
 	var keylen32 uint32
 	buf := bytes.NewBuffer(kek.SuppPubInfo)
 
@@ -205,6 +205,21 @@ func (kek *KEKParams) KeyLen() int {
 	}
 
 	return int(keylen32)
+}
+
+func MarshalKEK(kek *KEK) ([]byte, error) {
+	return asn1.Marshal(*kek)
+}
+
+func UnmarshalKEK(in []byte) (*KEK, error) {
+	var kek KEK
+
+	_, err := asn1.Unmarshal(in, &kek)
+	if err != nil {
+		return nil, err
+	} else {
+		return &kek, nil
+	}
 }
 
 func incCounter(counter []byte) {
@@ -220,7 +235,7 @@ func incCounter(counter []byte) {
 	}
 }
 
-func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEKParams {
+func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
 	if ainfo != nil && len(ainfo) != 64 {
 		return nil
 	}
@@ -231,7 +246,7 @@ func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *K
 		return nil
 	}
 
-	var kek KEKParams
+	var kek KEK
 
 	kek.SuppPubInfo = buf.Bytes()
 	kek.KeySpecificInfo.Algorithm = algorithm
@@ -240,7 +255,7 @@ func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *K
 	return &kek
 }
 
-func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEKParams, hash hash.Hash) (key []byte, err error) {
+func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.Hash) (key []byte, err error) {
 	var keylen int
 	if kek == nil {
 		return nil, ErrInvalidKEKParams
@@ -248,7 +263,7 @@ func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEKParams, hash 
 		return nil, ErrInvalidKEKParams
 	}
 
-	otherInfo, err := asn1.Marshal(*kek)
+	otherInfo, err := MarshalKEK(kek)
 	if err != nil {
 		return
 	}

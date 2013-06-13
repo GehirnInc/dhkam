@@ -99,7 +99,7 @@ func TestKEK(t *testing.T) {
 	keyList := make([][]byte, 5)
 	for i := 0; i < 5; i++ {
 		h := sha256.New()
-		keyList[i], err = prv1.KEK(rand.Reader, pub, kek, h)
+		keyList[i], err = prv1.CEK(rand.Reader, pub, kek, h)
 		if err != nil {
 			fmt.Println(err.Error())
 			t.FailNow()
