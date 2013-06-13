@@ -185,7 +185,11 @@ var (
 )
 
 // KEK represents the information needed to make use of a KEK. It isn't the
-// KEK itself, but rather maintains the KEK state.
+// KEK itself, but rather maintains the KEK state. This set of parameters
+// isn't actually tied to the private key, but it should only be used with
+// one key as it contains state relevant to a key. The algorithm is essentially
+// arbitrary, but it can be used to differentiate KEKs generated for different
+// algorithms.
 type KEK struct {
 	KeySpecificInfo keySpecificInfo
 	PartyAInfo      []byte `asn1:"optional"`

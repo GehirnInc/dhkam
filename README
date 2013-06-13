@@ -1,6 +1,9 @@
 Implementation of the Diffie-Hellman Key Agreement Method using
 the RFC 3526 Group 14, and with blinded key generation.
 
+Supports both plain shared keys and generating a key-encryption key for
+providing content encryption keys.
+
 Released under the ISC license. See the LICENSE file for details.
 
 TODO:
