@@ -184,17 +184,20 @@ var (
 	AES256GCM = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 46}
 )
 
+// KEK represents the information needed to make use of a KEK. It isn't the
+// KEK itself, but rather maintains the KEK state.
 type KEK struct {
-	KeySpecificInfo KeySpecificInfo
+	KeySpecificInfo keySpecificInfo
 	PartyAInfo      []byte `asn1:"optional"`
 	SuppPubInfo     []byte
 }
 
-type KeySpecificInfo struct {
+type keySpecificInfo struct {
 	Algorithm asn1.ObjectIdentifier
 	counter   []byte
 }
 
+// KeyLen returns the shared key size this KEK should be used to generate.
 func (kek *KEK) KeyLen() int {
 	var keylen32 uint32
 	buf := bytes.NewBuffer(kek.SuppPubInfo)
@@ -207,10 +210,12 @@ func (kek *KEK) KeyLen() int {
 	return int(keylen32)
 }
 
+// Store the KEK in DER format.
 func MarshalKEK(kek *KEK) ([]byte, error) {
 	return asn1.Marshal(*kek)
 }
 
+// Decode a KEK stored in DER format.
 func UnmarshalKEK(in []byte) (*KEK, error) {
 	var kek KEK
 
@@ -235,6 +240,10 @@ func incCounter(counter []byte) {
 	}
 }
 
+// Set up a new KEK, passing in the algorithm, length of generated keys, and
+// any additional information that should be applied to the key. Note that, as
+// per RFC 2631, if ainfo is present it must be 64 bytes long. If there was
+// an error setting up the KEK, returns nil.
 func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
 	if ainfo != nil && len(ainfo) != 64 {
 		return nil
@@ -255,6 +264,7 @@ func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *K
 	return &kek
 }
 
+// Generate a new CEK from the provided KEK.
 func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.Hash) (key []byte, err error) {
 	var keylen int
 	if kek == nil {
