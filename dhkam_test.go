@@ -2,6 +2,7 @@ package dhkam
 
 import "bytes"
 import "crypto/rand"
+import "crypto/sha256"
 import "fmt"
 import "testing"
 
@@ -57,19 +58,63 @@ func TestImportPrivate(t *testing.T) {
 }
 
 func TestImportPublic(t *testing.T) {
-        prv, err := GenerateKey(rand.Reader)
-        if err != nil {
-                fmt.Println(err.Error())
-                t.FailNow()
-        }
+	prv, err := GenerateKey(rand.Reader)
+	if err != nil {
+		fmt.Println(err.Error())
+		t.FailNow()
+	}
 
-        out := prv.Export()
-        pub, err := ImportPublic(out)
-        if err != nil {
-                fmt.Println(err.Error())
-                t.FailNow()
-        } else if pub.A.Cmp(prv.PublicKey.A) != 0 {
-                fmt.Println("dhkam: import public key failed")
-                t.FailNow()
-        }
+	out := prv.Export()
+	pub, err := ImportPublic(out)
+	if err != nil {
+		fmt.Println(err.Error())
+		t.FailNow()
+	} else if pub.A.Cmp(prv.PublicKey.A) != 0 {
+		fmt.Println("dhkam: import public key failed")
+		t.FailNow()
+	}
+}
+
+func TestKEK(t *testing.T) {
+	prv1, err := GenerateKey(rand.Reader)
+	if err != nil {
+		fmt.Println(err.Error())
+		t.FailNow()
+	}
+
+	prv2, err := GenerateKey(rand.Reader)
+	if err != nil {
+		fmt.Println(err.Error())
+		t.FailNow()
+	}
+
+	kek := InitialiseKEK(AES256CBC, SharedKeySize, nil)
+	if kek == nil {
+		fmt.Println("dhkam: failed to initialise KEK")
+		t.FailNow()
+	}
+
+	pub := &prv2.PublicKey
+
+	keyList := make([][]byte, 5)
+	for i := 0; i < 5; i++ {
+		h := sha256.New()
+		keyList[i], err = prv1.KEK(rand.Reader, pub, kek, h)
+		if err != nil {
+			fmt.Println(err.Error())
+			t.FailNow()
+		}
+	}
+
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 5; j++ {
+			if i == j {
+				continue
+			}
+			if bytes.Equal(keyList[i], keyList[j]) {
+				fmt.Println("dhkam: CEK isn't unique")
+				t.FailNow()
+			}
+		}
+	}
 }

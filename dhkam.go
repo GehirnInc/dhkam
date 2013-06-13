@@ -1,7 +1,11 @@
 package dhkam
 
 import (
+	"bytes"
+	"encoding/asn1"
+	"encoding/binary"
 	"fmt"
+	"hash"
 	"io"
 	"math/big"
 )
@@ -13,6 +17,7 @@ const (
 
 var (
 	ErrBlindingFailed    = fmt.Errorf("dhkam: blinding failed")
+	ErrInvalidKEKParams  = fmt.Errorf("dhkam: invalid KEK parameters")
 	ErrInvalidPrivateKey = fmt.Errorf("dhkam: invalid private key")
 	ErrInvalidPublicKey  = fmt.Errorf("dhkam: invalid public key")
 	ErrInvalidSharedKey  = fmt.Errorf("dhkam: invalid shared key")
@@ -166,5 +171,116 @@ func (prv *PrivateKey) SharedKey(prng io.Reader, pub *PublicKey, size int) (sk [
 	if len(sk) < size {
 		err = ErrInvalidSharedKey
 	}
+	return
+}
+
+// ASN.1 definitions for a few algorithms
+var (
+	AES128CBC = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 2}
+	AES128GCM = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 6}
+	AES192CBC = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 22}
+	AES192GCM = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 26}
+	AES256CBC = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 42}
+	AES256GCM = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 46}
+)
+
+type KEKParams struct {
+	KeySpecificInfo KeySpecificInfo
+	PartyAInfo      []byte `asn1:"optional"`
+	SuppPubInfo     []byte
+}
+
+type KeySpecificInfo struct {
+	Algorithm asn1.ObjectIdentifier
+	counter   []byte
+}
+
+func (kek *KEKParams) KeyLen() int {
+	var keylen32 uint32
+	buf := bytes.NewBuffer(kek.SuppPubInfo)
+
+	err := binary.Read(buf, binary.BigEndian, &keylen32)
+	if err != nil {
+		return 0
+	}
+
+	return int(keylen32)
+}
+
+func incCounter(counter []byte) {
+	if counter[3]++; counter[3] != 0 {
+		return
+	} else if counter[2]++; counter[2] != 0 {
+		return
+	} else if counter[1]++; counter[1] != 0 {
+		return
+	} else {
+		counter[0]++
+		return
+	}
+}
+
+func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEKParams {
+	if ainfo != nil && len(ainfo) != 64 {
+		return nil
+	}
+
+	keylen32 := uint32(keylen)
+	buf := new(bytes.Buffer)
+	if err := binary.Write(buf, binary.BigEndian, keylen32); err != nil {
+		return nil
+	}
+
+	var kek KEKParams
+
+	kek.SuppPubInfo = buf.Bytes()
+	kek.KeySpecificInfo.Algorithm = algorithm
+	kek.KeySpecificInfo.counter = []byte{0, 0, 0, 1}
+	kek.PartyAInfo = ainfo
+	return &kek
+}
+
+func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEKParams, hash hash.Hash) (key []byte, err error) {
+	var keylen int
+	if kek == nil {
+		return nil, ErrInvalidKEKParams
+	} else if keylen = kek.KeyLen(); keylen == 0 {
+		return nil, ErrInvalidKEKParams
+	}
+
+	otherInfo, err := asn1.Marshal(*kek)
+	if err != nil {
+		return
+	}
+
+	zz, err := prv.SharedKey(rand, pub, keylen)
+	if err != nil {
+		return
+	}
+	zz = leftPad(zz, 256)
+
+	blocks := ((keylen + 7) * 8) / (hash.Size() * 8)
+
+	key = make([]byte, 0, keylen)
+	for i := 0; i < blocks; i++ {
+		hash.Write(zz)
+		hash.Write(otherInfo)
+		key = append(key, hash.Sum(nil)...)
+		hash.Reset()
+		incCounter(kek.KeySpecificInfo.counter)
+	}
+	key = key[:keylen]
+	return
+}
+
+// leftPad returns a new slice of length size. The contents of input are right
+// aligned in the new slice.
+func leftPad(input []byte, size int) (out []byte) {
+	n := len(input)
+	if n > size {
+		n = size
+	}
+	out = make([]byte, size)
+	copy(out[len(out)-n:], input)
 	return
 }
