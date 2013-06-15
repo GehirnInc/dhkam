@@ -34,7 +34,7 @@
 		if err != nil {
 			// ...
 		}
-			
+
 		aesKey := key[:16]	// 16 bytes is AES-128 key length.
 		hmacKey := key[16:]	// the rest of the key is the HMAC key.
 */

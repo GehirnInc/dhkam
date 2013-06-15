@@ -208,25 +208,25 @@ type KeySpecificInfo struct {
 // Pre-defined KEK parameters to make life easier when generating KEKs.
 var (
 	KEKAES128CBCHMACSHA256 = KEKParams{
-		KeySpecificInfo: keySpecificInfo{
+		KeySpecificInfo: KeySpecificInfo{
 			Algorithm: AES128CBC,
 		},
 		SuppPubInfo: []byte{0, 0, 0, 48},
 	}
 	KEKAES192CBCHMACSHA384 = KEKParams{
-		KeySpecificInfo: keySpecificInfo{
+		KeySpecificInfo: KeySpecificInfo{
 			Algorithm: AES192CBC,
 		},
 		SuppPubInfo: []byte{0, 0, 0, 72},
 	}
 	KEKAES256CBCHMACSHA512 = KEKParams{
-		KeySpecificInfo: keySpecificInfo{
+		KeySpecificInfo: KeySpecificInfo{
 			Algorithm: AES256CBC,
 		},
 		SuppPubInfo: []byte{0, 0, 0, 32},
 	}
 	KEKAES256CBCHMACSHA256 = KEKParams{
-		KeySpecificInfo: keySpecificInfo{
+		KeySpecificInfo: KeySpecificInfo{
 			Algorithm: AES256CBC,
 		},
 		SuppPubInfo: []byte{0, 0, 0, 64},
