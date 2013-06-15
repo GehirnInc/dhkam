@@ -185,31 +185,56 @@ var (
 	AES256GCM = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 1, 46}
 )
 
-// KEK represents the information needed to make use of a KEK. It isn't the
-// KEK itself, but rather maintains the KEK state. This set of parameters
-// isn't actually tied to the private key, but it should only be used with
-// one key as it contains state relevant to a key. The algorithm is essentially
-// arbitrary, but it can be used to differentiate KEKs generated for different
-// algorithms.
-
+// KEK represents the information needed to make use of a KEK. A KEK should
+// correspond to a specific private - public keypair as used in the key
+// exchange.
 type KEK struct {
-	ZZ	[]byte
-	Params	*KEKParams
+	ZZ     []byte
+	Params KEKParams
+	h      hash.Hash
 }
 
 type KEKParams struct {
-	KeySpecificInfo keySpecificInfo
+	KeySpecificInfo KeySpecificInfo
 	PartyAInfo      []byte `asn1:"optional"`
 	SuppPubInfo     []byte
 }
 
-type keySpecificInfo struct {
+type KeySpecificInfo struct {
 	Algorithm asn1.ObjectIdentifier
 	counter   []byte
 }
 
+// Pre-defined KEK parameters to make life easier when generating KEKs.
+var (
+	KEKAES128CBCHMACSHA256 = KEKParams{
+		KeySpecificInfo: keySpecificInfo{
+			Algorithm: AES128CBC,
+		},
+		SuppPubInfo: []byte{0, 0, 0, 48},
+	}
+	KEKAES192CBCHMACSHA384 = KEKParams{
+		KeySpecificInfo: keySpecificInfo{
+			Algorithm: AES192CBC,
+		},
+		SuppPubInfo: []byte{0, 0, 0, 72},
+	}
+	KEKAES256CBCHMACSHA512 = KEKParams{
+		KeySpecificInfo: keySpecificInfo{
+			Algorithm: AES256CBC,
+		},
+		SuppPubInfo: []byte{0, 0, 0, 32},
+	}
+	KEKAES256CBCHMACSHA256 = KEKParams{
+		KeySpecificInfo: keySpecificInfo{
+			Algorithm: AES256CBC,
+		},
+		SuppPubInfo: []byte{0, 0, 0, 64},
+	}
+)
+
 // KeyLen returns the shared key size this KEK should be used to generate.
-func (kek *KEK) KeyLen() int {
+func (kek KEK) KeyLen() int {
 	var keylen32 uint32
 	buf := bytes.NewBuffer(kek.Params.SuppPubInfo)
 
@@ -223,18 +248,18 @@ func (kek *KEK) KeyLen() int {
 
 // Store the KEK in DER format.
 func marshalKEKParams(kek *KEK) ([]byte, error) {
-	return asn1.Marshal(*kek.Params)
+	return asn1.Marshal(kek.Params)
 }
 
 // Decode a KEK stored in DER format.
-func unmarshalKEKParams(in []byte) (*KEK, error) {
+func unmarshalKEKParams(in []byte) (KEK, error) {
 	var kek KEK
 
 	_, err := asn1.Unmarshal(in, &kek.Params)
 	if err != nil {
-		return nil, err
+		return kek, err
 	} else {
-		return &kek, nil
+		return kek, nil
 	}
 }
 
@@ -251,20 +276,21 @@ func incCounter(counter []byte) {
 	}
 }
 
-// Set up a new KEK, passing in the algorithm, length of generated keys, and
-// any additional information that should be applied to the key. Note that, as
-// per RFC 2631, if ainfo is present it must be 64 bytes long. If there was
-// an error setting up the KEK, returns nil.
-func (prv *PrivateKey) InitializeKEK(rand io.Reader, pub *PublicKey, algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
+// Set up a new KEK; a KEK is tuned for a specific pair of sender's
+// private key and receiver's public key.
+func (prv *PrivateKey) InitializeKEK(rand io.Reader, pub *PublicKey,
+	params KEKParams, ainfo []byte,
+	h hash.Hash) *KEK {
 	if ainfo != nil && len(ainfo) != 64 {
 		return nil
 	}
 
-	keylen32 := uint32(keylen)
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.BigEndian, keylen32); err != nil {
+	var keylen32 int32
+	buf := bytes.NewBuffer(params.SuppPubInfo)
+	if err := binary.Read(buf, binary.BigEndian, &keylen32); err != nil {
 		return nil
 	}
+	keylen := int(keylen32)
 
 	var err error
 	var kek KEK
@@ -273,21 +299,17 @@ func (prv *PrivateKey) InitializeKEK(rand io.Reader, pub *PublicKey, algorithm a
 	if err != nil {
 		return nil
 	}
-	kek.ZZ = zeroPad(kek.ZZ, (P.BitLen() + 7) / 8)
+	kek.ZZ = zeroPad(kek.ZZ, (P.BitLen()+7)/8)
 
-	kek.Params = &KEKParams{
-		SuppPubInfo: buf.Bytes(),
-		KeySpecificInfo: keySpecificInfo{
-			Algorithm: algorithm,
-			counter: []byte{0, 0, 0, 1},
-		},
-		PartyAInfo: ainfo,
-	}
+	kek.Params = params
+	kek.Params.PartyAInfo = ainfo
+	kek.Params.KeySpecificInfo.counter = []byte{0, 0, 0, 1}
+	kek.h = h
 	return &kek
 }
 
 // Generate a new CEK from the provided KEK.
-func (prv *PrivateKey) CEK(kek *KEK, hash hash.Hash) (key []byte, err error) {
+func (prv *PrivateKey) CEK(kek *KEK) (key []byte, err error) {
 	var keylen int
 	if kek == nil {
 		return nil, ErrInvalidKEKParams
@@ -300,14 +322,15 @@ func (prv *PrivateKey) CEK(kek *KEK, hash hash.Hash) (key []byte, err error) {
 		return
 	}
 
-	hLen := hash.Size()
+	kek.h.Reset()
+	hLen := kek.h.Size()
 
 	key = make([]byte, keylen)
 	for i := 0; i < keylen; i += hLen {
-		hash.Write(kek.ZZ)
-		hash.Write(otherInfo)
-		copy(key[i:], hash.Sum(nil))
-		hash.Reset()
+		kek.h.Write(kek.ZZ)
+		kek.h.Write(otherInfo)
+		copy(key[i:], kek.h.Sum(nil))
+		kek.h.Reset()
 		incCounter(kek.Params.KeySpecificInfo.counter)
 	}
 	key = key[:keylen]
