@@ -279,8 +279,7 @@ func incCounter(counter []byte) {
 // Set up a new KEK; a KEK is tuned for a specific pair of sender's
 // private key and receiver's public key.
 func (prv *PrivateKey) InitializeKEK(rand io.Reader, pub *PublicKey,
-	params KEKParams, ainfo []byte,
-	h hash.Hash) *KEK {
+	params KEKParams, ainfo []byte, h hash.Hash) *KEK {
 	if ainfo != nil && len(ainfo) != 64 {
 		return nil
 	}
