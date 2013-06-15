@@ -288,13 +288,13 @@ func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.H
 	}
 	zz = leftPad(zz, 256)
 
-	blocks := ((keylen + 7) * 8) / (hash.Size() * 8)
+	hLen := hash.Size()
 
-	key = make([]byte, 0, keylen)
-	for i := 0; i < blocks; i++ {
+	key = make([]byte, keylen)
+	for i := 0; i < keylen; i += hLen {
 		hash.Write(zz)
 		hash.Write(otherInfo)
-		key = append(key, hash.Sum(nil)...)
+		copy(key[i:], hash.Sum(nil))
 		hash.Reset()
 		incCounter(kek.KeySpecificInfo.counter)
 	}
