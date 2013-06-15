@@ -51,7 +51,8 @@ type PrivateKey struct {
 	X *big.Int
 }
 
-// Export returns a byte slice representation of the public key.
+// Export returns a byte slice representation of the public key. This
+// is not DER-encoded.
 func (prv *PrivateKey) Export() []byte {
 	if prv == nil || prv.PublicKey.A == nil {
 		return nil
@@ -68,7 +69,7 @@ func (prv *PrivateKey) ExportPrivate() []byte {
 }
 
 // GeneratePublic is used to regenerate the public key for the private key.
-func (prv *PrivateKey) GeneratePublic(prng io.Reader) (err error) {
+func (prv *PrivateKey) generatePublic(prng io.Reader) (err error) {
 	if prv == nil {
 		return ErrInvalidPrivateKey
 	}
@@ -81,7 +82,7 @@ func (prv *PrivateKey) GeneratePublic(prng io.Reader) (err error) {
 func ImportPrivate(prng io.Reader, in []byte) (prv *PrivateKey, err error) {
 	prv = new(PrivateKey)
 	prv.X = new(big.Int).SetBytes(in)
-	err = prv.GeneratePublic(prng)
+	err = prv.generatePublic(prng)
 	return
 }
 
@@ -248,7 +249,7 @@ func incCounter(counter []byte) {
 // any additional information that should be applied to the key. Note that, as
 // per RFC 2631, if ainfo is present it must be 64 bytes long. If there was
 // an error setting up the KEK, returns nil.
-func InitialiseKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
+func InitializeKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
 	if ainfo != nil && len(ainfo) != 64 {
 		return nil
 	}
@@ -286,7 +287,7 @@ func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.H
 	if err != nil {
 		return
 	}
-	zz = leftPad(zz, 256)
+	zz = zeroPad(zz, 256)
 
 	hLen := hash.Size()
 
@@ -302,14 +303,15 @@ func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.H
 	return
 }
 
-// leftPad returns a new slice of length size. The contents of input are right
+// zeroPad returns a new slice of length size. The contents of input are right
 // aligned in the new slice.
-func leftPad(input []byte, size int) (out []byte) {
-	n := len(input)
-	if n > size {
-		n = size
+func zeroPad(in []byte, outlen int) (out []byte) {
+	var inLen int
+	if inLen = len(in); inLen > outlen {
+		inLen = outlen
 	}
-	out = make([]byte, size)
-	copy(out[len(out)-n:], input)
+	start := outlen - inLen - 1
+	out = make([]byte, outlen)
+	copy(out[start:], in)
 	return
 }
