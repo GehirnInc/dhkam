@@ -104,29 +104,30 @@ func TestKEK(t *testing.T) {
 		t.FailNow()
 	}
 
-	kek1 := InitializeKEK(AES256CBC, SharedKeySize, nil)
+	pub1 := &prv1.PublicKey
+	pub2 := &prv2.PublicKey
+
+	kek1 := prv1.InitializeKEK(rand.Reader, pub2, AES256CBC, SharedKeySize, nil)
 	if kek1 == nil {
 		fmt.Println("dhkam: failed to initialise KEK")
 		t.FailNow()
 	}
-	kek2 := InitializeKEK(AES256CBC, SharedKeySize, nil)
+	kek2 := prv2.InitializeKEK(rand.Reader, pub1, AES256CBC, SharedKeySize, nil)
 	if kek2 == nil {
 		fmt.Println("dhkam: failed to initialise KEK")
 		t.FailNow()
 	}
-	pub1 := &prv1.PublicKey
-	pub2 := &prv2.PublicKey
 
 	keyList1 := make([][]byte, numTestCEK)
 	keyList2 := make([][]byte, numTestCEK)
 	for i := 0; i < numTestCEK; i++ {
 		h := sha512.New()
-		keyList1[i], err = prv1.CEK(rand.Reader, pub2, kek1, h)
+		keyList1[i], err = prv1.CEK(kek1, h)
 		if err != nil {
 			fmt.Println(err.Error())
 			t.FailNow()
 		}
-		keyList2[i], err = prv2.CEK(rand.Reader, pub1, kek2, h)
+		keyList2[i], err = prv2.CEK(kek2, h)
 		if err != nil {
 			fmt.Println(err.Error())
 			t.FailNow()
@@ -202,7 +203,7 @@ func BenchmarkCEKGeneration(b *testing.B) {
 		fmt.Println(err.Error())
 		b.FailNow()
 	}
-	kek := InitializeKEK(AES256CBC, SharedKeySize, nil)
+	kek := prv1.InitializeKEK(rand.Reader, &prv2.PublicKey, AES256CBC, SharedKeySize, nil)
 	if kek == nil {
 		fmt.Println("dhkam: failed to generate KEK")
 		b.FailNow()
@@ -211,7 +212,7 @@ func BenchmarkCEKGeneration(b *testing.B) {
 	h := sha512.New()
 
 	for i := 0; i < b.N; i++ {
-		_, err := prv1.CEK(rand.Reader, &prv2.PublicKey, kek, h)
+		_, err := prv1.CEK(kek, h)
 		if err != nil {
 			fmt.Println(err.Error())
 			b.FailNow()

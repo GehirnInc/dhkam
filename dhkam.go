@@ -157,8 +157,8 @@ func blind(prng io.Reader, a, x *big.Int) (y *big.Int, err error) {
 	return
 }
 
-// GenerateSharedKey returns a shared key from a private and public key
-// suitable for use in symmetric encryption.
+// SharedKey returns a shared key from a private and public key suitable
+// for use in symmetric encryption.
 func (prv *PrivateKey) SharedKey(prng io.Reader, pub *PublicKey, size int) (sk []byte, err error) {
 	if !pub.Valid() {
 		err = ErrInvalidPublicKey
@@ -191,7 +191,13 @@ var (
 // one key as it contains state relevant to a key. The algorithm is essentially
 // arbitrary, but it can be used to differentiate KEKs generated for different
 // algorithms.
+
 type KEK struct {
+	ZZ	[]byte
+	Params	*KEKParams
+}
+
+type KEKParams struct {
 	KeySpecificInfo keySpecificInfo
 	PartyAInfo      []byte `asn1:"optional"`
 	SuppPubInfo     []byte
@@ -205,7 +211,7 @@ type keySpecificInfo struct {
 // KeyLen returns the shared key size this KEK should be used to generate.
 func (kek *KEK) KeyLen() int {
 	var keylen32 uint32
-	buf := bytes.NewBuffer(kek.SuppPubInfo)
+	buf := bytes.NewBuffer(kek.Params.SuppPubInfo)
 
 	err := binary.Read(buf, binary.BigEndian, &keylen32)
 	if err != nil {
@@ -216,15 +222,15 @@ func (kek *KEK) KeyLen() int {
 }
 
 // Store the KEK in DER format.
-func MarshalKEK(kek *KEK) ([]byte, error) {
-	return asn1.Marshal(*kek)
+func marshalKEKParams(kek *KEK) ([]byte, error) {
+	return asn1.Marshal(*kek.Params)
 }
 
 // Decode a KEK stored in DER format.
-func UnmarshalKEK(in []byte) (*KEK, error) {
+func unmarshalKEKParams(in []byte) (*KEK, error) {
 	var kek KEK
 
-	_, err := asn1.Unmarshal(in, &kek)
+	_, err := asn1.Unmarshal(in, &kek.Params)
 	if err != nil {
 		return nil, err
 	} else {
@@ -249,7 +255,7 @@ func incCounter(counter []byte) {
 // any additional information that should be applied to the key. Note that, as
 // per RFC 2631, if ainfo is present it must be 64 bytes long. If there was
 // an error setting up the KEK, returns nil.
-func InitializeKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
+func (prv *PrivateKey) InitializeKEK(rand io.Reader, pub *PublicKey, algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *KEK {
 	if ainfo != nil && len(ainfo) != 64 {
 		return nil
 	}
@@ -260,17 +266,28 @@ func InitializeKEK(algorithm asn1.ObjectIdentifier, keylen int, ainfo []byte) *K
 		return nil
 	}
 
+	var err error
 	var kek KEK
 
-	kek.SuppPubInfo = buf.Bytes()
-	kek.KeySpecificInfo.Algorithm = algorithm
-	kek.KeySpecificInfo.counter = []byte{0, 0, 0, 1}
-	kek.PartyAInfo = ainfo
+	kek.ZZ, err = prv.SharedKey(rand, pub, keylen)
+	if err != nil {
+		return nil
+	}
+	kek.ZZ = zeroPad(kek.ZZ, (P.BitLen() + 7) / 8)
+
+	kek.Params = &KEKParams{
+		SuppPubInfo: buf.Bytes(),
+		KeySpecificInfo: keySpecificInfo{
+			Algorithm: algorithm,
+			counter: []byte{0, 0, 0, 1},
+		},
+		PartyAInfo: ainfo,
+	}
 	return &kek
 }
 
 // Generate a new CEK from the provided KEK.
-func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.Hash) (key []byte, err error) {
+func (prv *PrivateKey) CEK(kek *KEK, hash hash.Hash) (key []byte, err error) {
 	var keylen int
 	if kek == nil {
 		return nil, ErrInvalidKEKParams
@@ -278,26 +295,20 @@ func (prv *PrivateKey) CEK(rand io.Reader, pub *PublicKey, kek *KEK, hash hash.H
 		return nil, ErrInvalidKEKParams
 	}
 
-	otherInfo, err := MarshalKEK(kek)
+	otherInfo, err := marshalKEKParams(kek)
 	if err != nil {
 		return
 	}
-
-	zz, err := prv.SharedKey(rand, pub, keylen)
-	if err != nil {
-		return
-	}
-	zz = zeroPad(zz, 256)
 
 	hLen := hash.Size()
 
 	key = make([]byte, keylen)
 	for i := 0; i < keylen; i += hLen {
-		hash.Write(zz)
+		hash.Write(kek.ZZ)
 		hash.Write(otherInfo)
 		copy(key[i:], hash.Sum(nil))
 		hash.Reset()
-		incCounter(kek.KeySpecificInfo.counter)
+		incCounter(kek.Params.KeySpecificInfo.counter)
 	}
 	key = key[:keylen]
 	return
